@@ -9,6 +9,7 @@ from itertools import izip
 import tensorflow as tf
 import re
 import os
+import pickle as pkl
 
 flags = tf.flags
 flags.DEFINE_string('dst_dir', 'data', 'Directory to write to.')
