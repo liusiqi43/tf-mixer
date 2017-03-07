@@ -1,4 +1,3 @@
-
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -14,7 +13,9 @@ import pickle as pkl
 flags = tf.flags
 flags.DEFINE_string('dst_dir', 'data', 'Directory to write to.')
 flags.DEFINE_string('src_dir', 'prep', 'Directory containing preprocessed data.')
-flags.DEFINE_integer('threshold', 3, 'Remove tokens appeared less than `threshold` number of times.')
+flags.DEFINE_integer(
+  'threshold', 3,
+  'Remove tokens appeared less than `threshold` number of times.')
 
 FLAGS = flags.FLAGS
 
@@ -58,7 +59,7 @@ def build_dictionary(filename, threshold):
   dictionary = {w : i for i, w in enumerate(vocab_list)}
   return dictionary
 
-def words_to_ids(words, dictionary, marking):
+def words_to_ids(words, dictionary):
   ids = []
   unk_count = 0
   for w in words:
@@ -67,13 +68,6 @@ def words_to_ids(words, dictionary, marking):
       unk_count += 1
     else:
       ids.append(dictionary[w])
-
-  if marking == 'append':
-    ids.append(dictionary[EOS])
-  elif marking == 'prepend':
-    ids.insert(0, dictionary[EOS])
-  else:
-    raise RuntimeError('Unrecognized marking strategy: %s' % marking)
   return ids, unk_count, len(ids)
 
 def build_tfrecords(src_dict, src_fname, target_dict, target_fname,
@@ -92,11 +86,13 @@ def build_tfrecords(src_dict, src_fname, target_dict, target_fname,
       src = cleanup_sentence(src)
       target = cleanup_sentence(target)
 
-      src_ids, unk, tok = words_to_ids(src.split(), src_dict, 'append')
+      src_tokens = src.split() + [EOS, ]
+      src_ids, unk, tok = words_to_ids(src_tokens, src_dict)
       src_unk_count += unk
       src_tokens_count += tok
 
-      target_ids, unk, tok = words_to_ids(target.split(), target_dict, 'prepend')
+      target_tokens = [EOS, ] + target.split()
+      target_ids, unk, tok = words_to_ids(target_tokens, target_dict)
       target_unk_count += unk
       target_tokens_count += tok
 
@@ -104,13 +100,13 @@ def build_tfrecords(src_dict, src_fname, target_dict, target_fname,
         features=tf.train.Features(
           feature={
             'src': tf.train.Feature(
-              bytes_list=tf.train.BytesList(value=[src])),
+              bytes_list=tf.train.BytesList(value=[' '.join(src_tokens)])),
             'target': tf.train.Feature(
-              bytes_list=tf.train.BytesList(value=[target])),
+              bytes_list=tf.train.BytesList(value=[' '.join(target_tokens)])),
             'src_ids': tf.train.Feature(
               int64_list=tf.train.Int64List(value=src_ids)),
             'target_ids': tf.train.Feature(
-              int64_list=tf.train.Int64List(value=src_ids)),
+              int64_list=tf.train.Int64List(value=target_ids)),
           }
         )
       )
