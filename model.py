@@ -30,11 +30,10 @@ def encode(src, src_vocab_size, tgt, tgt_vocab_size, hidden_size, window=5):
                                        [1, window, 1, 1], padding='SAME')
     windowed_seqpos_embs = tf.squeeze(windowed_seqpos_embs, 2)
 
-    tgt_embs = tf.nn.embedding_lookup(tgt_embeddings, tgt)
-    tgt_embs_ta = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
-    tgt_embs_ta = tgt_embs_ta.unpack(tgt_embs)
-
+    tgt_ta = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+    tgt_ta = tgt_ta.unpack(tgt)
     tgt_seqlen = length(tgt)
+
     cell = tf.nn.rnn_cell.LSTMCell(hidden_size)
 
     def loop_fn(time, cell_output, cell_state, loop_state):
@@ -46,12 +45,12 @@ def encode(src, src_vocab_size, tgt, tgt_vocab_size, hidden_size, window=5):
 
       prev_h = next_cell_state.h
       prev_c = next_cell_state.c
-      inp = tgt_embs_ta.read(time)
+      tgt_t = tgt_ta.read(time)
 
       # projection of previous hidden state onto source word space
       tgt_hid_proj = slim.fully_connected(prev_h, hidden_size, 'tgt_hid_proj')
       tgt_cel_proj = slim.fully_connected(prev_c, hidden_size, 'tgt_cel_proj')
-      tgt_embs = tf.nn.embedding_lookup(inp_embeddings, inp)
+      tgt_emb_t = tf.nn.embedding_lookup(tgt_embeddings, tgt_t)
 
       # tgt_rep of shape [batch_size, hidden_size].
       tgt_rep = tgt_hid_proj + tgt_cel_proj + tgt_embs
@@ -66,7 +65,7 @@ def encode(src, src_vocab_size, tgt, tgt_vocab_size, hidden_size, window=5):
       next_input = tf.cond(
           finished,
           lambda: tf.zeros([batch_size, hidden_size], dtype=tf.float32),
-          lambda: conv_attn_aux + inp)
+          lambda: conv_attn_aux + tf.nn.embedding_lookup(inp_embeddings, tgt_t))
       next_loop_state = None
       return (elements_finished, next_input, next_cell_state,
               emit_output, next_loop_state)
